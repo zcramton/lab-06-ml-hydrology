@@ -12,7 +12,7 @@ format:
   html:
     self-contained: true
 ---
-
+# Setup
 ```{r}
 # Load necessary libraries
 library(tidyverse)
@@ -43,10 +43,10 @@ walk2(remote_files, local_files, download.file, quiet = TRUE)
 camels <- map(local_files, read_delim, show_col_types = FALSE) 
 camels <- power_full_join(camels ,by = 'gauge_id')
 ```
-Quesiton 1:
+# Quesiton 1:
 zero_q_freq represents 
 
-Question 2:
+# Question 2:
 ```{r}
 ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
   borders("state", colour = "gray50") +
