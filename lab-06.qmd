@@ -1,0 +1,57 @@
+---
+title: "Lab 6: Machine Learning in Hydrology"
+subtitle: 'ESS 330 - Quantitative Reasoning'
+author:
+  - name: "Zachary Cramton"
+    url: "https://zcramton.github.io"
+    email: "ZCramton@colostate.edu"
+toc: true
+execute:
+  echo: true
+format:
+  html:
+    self-contained: true
+---
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(tidymodels)
+library(powerjoin)
+library(glue)
+library(vip)
+library(baguette)
+
+# Download data
+root  <- 'https://gdex.ucar.edu/dataset/camels/file'
+
+# Download metadata and documentation
+download.file('https://gdex.ucar.edu/dataset/camels/file/camels_attributes_v2.0.pdf', 
+              'data/camels_attributes_v2.0.pdf')
+
+# Get data specific text files
+types <- c("clim", "geol", "soil", "topo", "vege", "hydro")
+
+# Construct URLs and file names for the data
+remote_files <- glue('{root}/camels_{types}.txt')
+local_files <- glue('data/camels_{types}.txt')
+
+# Download specific data
+walk2(remote_files, local_files, download.file, quiet = TRUE)
+
+# Read and merge data
+camels <- map(local_files, read_delim, show_col_types = FALSE) 
+camels <- power_full_join(camels ,by = 'gauge_id')
+```
+Quesiton 1:
+zero_q_freq represents 
+
+Question 2:
+```{r}
+ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
+  borders("state", colour = "gray50") +
+  geom_point(aes(color = q_mean)) +
+  scale_color_gradient(low = "pink", high = "dodgerblue") +
+  ggthemes::theme_map()
+```
+
