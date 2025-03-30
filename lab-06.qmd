@@ -1,0 +1,184 @@
+---
+title: "Lab 6: Machine Learning in Hydrology"
+subtitle: 'ESS 330 - Quantitative Reasoning'
+author:
+  - name: "Zachary Cramton"
+    url: "https://zcramton.github.io"
+    email: "ZCramton@colostate.edu"
+toc: true
+execute:
+  echo: true
+format:
+  html:
+    self-contained: true
+---
+# Setup
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(tidymodels)
+library(powerjoin)
+library(glue)
+library(vip)
+library(baguette)
+library(patchwork)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+
+# Download data
+root  <- 'https://gdex.ucar.edu/dataset/camels/file'
+
+# Download metadata and documentation
+download.file('https://gdex.ucar.edu/dataset/camels/file/camels_attributes_v2.0.pdf', 
+              'data/camels_attributes_v2.0.pdf', mode = "wb")
+
+# Get data specific text files
+types <- c("clim", "geol", "soil", "topo", "vege", "hydro")
+
+# Construct URLs and file names for the data
+remote_files <- glue('{root}/camels_{types}.txt')
+local_files <- glue('data/camels_{types}.txt')
+
+# Download specific data
+walk2(remote_files, local_files, download.file, quiet = TRUE)
+
+# Read and merge data
+camels <- map(local_files, read_delim, show_col_types = FALSE) 
+camels <- power_full_join(camels ,by = 'gauge_id')
+```
+# Quesiton 1:
+zero_q_freq represents the frequency of days where Q = 0 mm/day indicating no discharge/flow.
+
+# Question 2:
+```{r}
+# Gauge Locations Plot
+p_mean_plot <- ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat)) +
+  borders("state", colour = "gray50") +
+  geom_point(aes(color = p_mean)) + labs(title = "Mean Daily Precipitation Across the Contintnetal US", color = "Precipitation (mm)") +
+  scale_color_gradient(low = "tan", high = "darkgreen") + 
+  theme_map() +
+  coord_fixed(1.3) + # Ensures correct aspect ratio
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5))  # Center the title horizontally
+  
+
+# Aridity Plot
+aridity_plot <- ggplot(data = camels, aes(x = gauge_lon, y = gauge_lat))+
+  borders("state", colour = "gray50") + geom_point(aes(color = aridity)) + labs(title = "Aridity Across the Contintnetal US", color = "Aridity Index") + scale_color_gradient(low = "dodgerblue", high = "red") + 
+  theme_map() +
+  coord_fixed(1.3) +  # Ensures correct aspect ratio +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) # Center the title horizontally
+  
+
+
+# Combine Plots
+combined_maps <- ggarrange(
+  p_mean_plot, aridity_plot,
+  ncol = 1, nrow = 2,  # Stack vertically
+  common.legend = FALSE,  # Separate legends
+  legend = "bottom",  # Place the legend at the bottom
+  heights = c(1, 1)  # Ensure both plots have equal height
+)
+
+# Display combined plots
+combined_maps
+```
+
+# Question 3:
+## Lab Activity:
+```{r}
+# Model Preparation
+camels |> 
+  select(aridity, p_mean, q_mean) |> 
+  drop_na() |> 
+  cor()
+
+# Create a scatter plot of aridity vs rainfall
+ggplot(camels, aes(x = aridity, y = p_mean)) +
+  # Add points colored by mean flow
+  geom_point(aes(color = q_mean)) +
+  # Add a linear regression line
+  geom_smooth(method = "lm", color = "red", linetype = 2) +
+  # Apply the viridis color scale
+  scale_color_viridis_c() +
+  # Add a title, axis labels, and theme (w/ legend on the bottom)
+  theme_linedraw() + 
+  theme(legend.position = "bottom") + 
+  labs(title = "Aridity vs Rainfall vs Runnoff", 
+       x = "Aridity", 
+       y = "Rainfall",
+       color = "Mean Flow")
+
+# Create a scatter plot of aridity vs rainfall with log axes
+ggplot(camels, aes(x = aridity, y = p_mean)) +
+  geom_point(aes(color = q_mean)) +
+  geom_smooth(method = "lm") +
+  scale_color_viridis_c() +
+  # Apply log transformations to the x and y axes
+  scale_x_log10() + 
+  scale_y_log10() +
+  theme_linedraw() +
+  theme(legend.position = "bottom") + 
+  labs(title = "Aridity vs Rainfall vs Runnoff", 
+       x = "Aridity", 
+       y = "Rainfall",
+       color = "Mean Flow")
+
+# Scale the legend to the log scale plot
+ggplot(camels, aes(x = aridity, y = p_mean)) +
+  geom_point(aes(color = q_mean)) +
+  geom_smooth(method = "lm") +
+  # Apply a log transformation to the color scale
+  scale_color_viridis_c(trans = "log") +
+  scale_x_log10() + 
+  scale_y_log10() +
+  theme_linedraw() +
+  theme(legend.position = "bottom",
+        # Expand the legend width ...
+        legend.key.width = unit(2.5, "cm"),
+        legend.key.height = unit(.5, "cm")) + 
+  labs(title = "Aridity vs Rainfall vs Runnoff", 
+       x = "Aridity", 
+       y = "Rainfall",
+       color = "Mean Flow") 
+```
+
+```{r}
+# Building the Model
+set.seed(123)
+# Bad form to perform simple transformations on the outcome variable within a 
+# recipe. So, we'll do it here.
+camels <- camels |> 
+  mutate(logQmean = log(q_mean))
+
+# Generate the split
+camels_split <- initial_split(camels, prop = 0.8)
+camels_train <- training(camels_split)
+camels_test  <- testing(camels_split)
+
+camels_cv <- vfold_cv(camels_train, v = 10)
+
+# Create a recipe to preprocess the data
+rec <-  recipe(logQmean ~ aridity + p_mean, data = camels_train) %>%
+  # Log transform the predictor variables (aridity and p_mean)
+  step_log(all_predictors()) %>%
+  # Add an interaction term between aridity and p_mean
+  step_interact(terms = ~ aridity:p_mean) |> 
+  # Drop any rows with missing values in the pred
+  step_naomit(all_predictors(), all_outcomes())
+
+# Prepare the data
+baked_data <- prep(rec, camels_train) |> 
+  bake(new_data = NULL)
+
+# Interaction with lm
+#  Base lm sets interaction terms with the * symbol
+lm_base <- lm(logQmean ~ aridity * p_mean, data = baked_data)
+summary(lm_base)
+
+# Sanity Interaction term from recipe ... these should be equal!!
+summary(lm(logQmean ~ aridity + p_mean + aridity_x_p_mean, data = baked_data))
+```
+
