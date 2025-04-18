@@ -7,7 +7,7 @@ website:
   title: "CSU ESS 330 Lab 6/8"
   navbar:
     left:
-      - href: lab-06.qmd
+      - href: index.qmd
         text: Lab-6
       - href: hyperparameter-tuning.qmd
         text: Lab-8
