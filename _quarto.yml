@@ -1,7 +1,17 @@
-project:
-  title: "CSU ESS 330 Lab 6"
-  output-dir: docs
+project: 
   type: website
+  output-dir: docs
+  title: "CSU ESS 330 Lab 6/8"
+
+website:
+  title: "CSU ESS 330 Lab 6/8"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Lab-6
+      - href: hyperparameter-tuning.qmd
+        text: Lab-8
+        
 format:
   html:
-    self-contained: TRUE
+    self-contained: true
